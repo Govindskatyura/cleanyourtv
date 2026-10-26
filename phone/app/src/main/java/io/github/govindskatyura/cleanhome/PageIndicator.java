@@ -74,6 +74,12 @@ final class PageIndicator extends View {
         invalidate();
     }
 
+    /** Moves the current dot without showing the dots: for layout changes, not swipes. */
+    void jumpTo(float p) {
+        position = p;
+        invalidate();
+    }
+
     void settle() {
         removeCallbacks(hideDots);
         if (!editing) postDelayed(hideDots, 1200);

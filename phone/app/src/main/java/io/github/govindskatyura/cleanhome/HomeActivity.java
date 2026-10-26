@@ -332,7 +332,9 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
             if (v != null) v.setVisibility(View.INVISIBLE);
         }
         plus.setVisibility(editing && !layout.widget ? View.VISIBLE : View.GONE);
-        onPageScroll(workspace.getScrollX() / (float) Math.max(1, m.width));
+        float position = workspace.getScrollX() / (float) Math.max(1, m.width);
+        indicator.jumpTo(Math.min(position, Math.max(0, layout.pages.size() - 1)));
+        fadeForLibrary(position);
     }
 
     private void refreshLibrary() {
@@ -472,11 +474,15 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         drag.onTouch(e);
     }
 
-    /** Also fades the dock and the pill away as the App Library slides in, as iOS does. */
     @Override
     public void onPageScroll(float position) {
+        indicator.setPosition(Math.min(position, Math.max(0, layout.pages.size() - 1)));
+        fadeForLibrary(position);
+    }
+
+    /** Fades the dock and the pill away as the App Library slides in, as iOS does. */
+    private void fadeForLibrary(float position) {
         int last = Math.max(0, layout.pages.size() - 1);
-        indicator.setPosition(Math.min(position, last));
         float lib = Math.max(0f, Math.min(1f, position - last));
         dock.setAlpha(1f - lib);
         dock.setTranslationY(lib * m.dockH / 2f);
