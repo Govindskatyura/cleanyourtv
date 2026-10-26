@@ -30,7 +30,8 @@ own apps' icons cut to the iOS shape, and labels use the phone's system font.
 - **App Library**: swipe past the last page. Every app is sorted into groups (Suggestions, Recently Added,
   then Social, Entertainment, Finance and so on), with three apps to open straight away and a small grid
   that opens the whole group. Its search field lists every app A to Z and narrows as you type. Hold an app
-  there for **Add to Home Screen** or **Delete App**. Groups come from the app's Play Store category, else
+  there for **Add to Home Screen** (an app you removed), **Show on Home Screen** (an app already on a page:
+  it takes you there and pulses the icon) or **Delete App**. Groups come from the app's Play Store category, else
   from words in its name, else Utilities (system apps) or Other.
 - **Jiggle mode**: long-press an empty spot, choose Edit Home Screen, or hold an app and move it. Apps
   wiggle and get a "−". You can drag apps around the grid, onto another page by holding at the screen

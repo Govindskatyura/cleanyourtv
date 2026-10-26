@@ -19,6 +19,7 @@
     <string name="remove_message">Removing from Home Screen will keep the app in your App Library.</string>
     <string name="add_to_home">Add to Home Screen</string>
     <string name="added_to_home">Added to Home Screen</string>
+    <string name="show_on_home">Show on Home Screen</string>
     <string name="remove">Remove</string>
     <string name="remove_widget_title">Remove “%1$s” Widget?</string>
     <string name="remove_widget_message">Removing this widget will not delete any data.</string>

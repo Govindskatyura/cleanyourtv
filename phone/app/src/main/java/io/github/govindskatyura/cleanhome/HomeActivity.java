@@ -733,6 +733,29 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         layout.save();
         syncViews(false);
         Toast.makeText(this, R.string.added_to_home, Toast.LENGTH_SHORT).show();
+        onShowOnHome(app);
+    }
+
+    /** Leaves the App Library for the app's page and pulses its tile, so you can see where it is. */
+    @Override
+    public void onShowOnHome(App app) {
+        closeMenu(false);
+        search.closeNow();
+        closeFolder(false);
+        int[] at = layout.find(app.key);
+        if (at == null) return;
+        int last = Math.max(0, layout.pages.size() - 1);
+        // A dock app shows on every page: just leave the App Library if that is where we are.
+        workspace.snapToPage(at[0] == HomeLayout.DOCK ? Math.min(workspace.getCurrentPage(), last) : at[0]);
+        AppIconView v = viewFor(app.key);
+        if (v != null) v.postDelayed(() -> pulse(v, 2), 380);
+    }
+
+    private static void pulse(View v, int times) {
+        if (times <= 0) return;
+        v.animate().scaleX(1.22f).scaleY(1.22f).setDuration(160).withEndAction(() ->
+                v.animate().scaleX(1f).scaleY(1f).setDuration(200).withEndAction(() -> pulse(v, times - 1)).start()
+        ).start();
     }
 
     @Override

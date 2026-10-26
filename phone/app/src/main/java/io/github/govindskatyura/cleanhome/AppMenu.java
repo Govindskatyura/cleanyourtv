@@ -26,7 +26,8 @@ import java.util.List;
 /**
  * The iOS long-press menu: the page dims, the app's tile lifts, and a rounded card opens beside it with
  * the app's own shortcuts (Android's Quick Actions), then the system actions. On the Home Screen those are
- * Edit Home Screen, App Info and Remove App; in the App Library, Add to Home Screen, App Info and Delete App.
+ * Edit Home Screen, App Info and Remove App; in the App Library, Add to Home Screen (or Show on Home Screen
+ * for an app already on a page), App Info and Delete App.
  */
 @SuppressLint("ViewConstructor")
 final class AppMenu extends FrameLayout {
@@ -40,6 +41,8 @@ final class AppMenu extends FrameLayout {
         void onDelete(App app);
 
         void onAddToHome(App app);
+
+        void onShowOnHome(App app);
 
         void onShortcut(ShortcutInfo shortcut);
 
@@ -112,6 +115,10 @@ final class AppMenu extends FrameLayout {
         } else if (!onHome) {
             addRow(c.getString(R.string.add_to_home), tinted(R.drawable.ic_menu_add, textColor), textColor,
                     v -> actions.onAddToHome(app));
+        } else {
+            // Already on a page: every app starts there, so say so and take you to it.
+            addRow(c.getString(R.string.show_on_home), tinted(R.drawable.ic_menu_edit, textColor), textColor,
+                    v -> actions.onShowOnHome(app));
         }
         addRow(c.getString(R.string.app_info), tinted(R.drawable.ic_menu_info, textColor), textColor,
                 v -> actions.onAppInfo(app));
