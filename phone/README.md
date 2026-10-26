@@ -1,5 +1,7 @@
 # Clean Home: an iOS-style home screen for Android phones
 
+<img src="docs/home.jpg" alt="Clean Home on a POCO M2 Pro: the Memory widget, a 4-column grid of squircle icons and the glass dock" width="300">
+
 A small launcher that lays out an Android phone's home screen the way an iPhone does. It's plain Java
 with no libraries, it asks for no internet, storage or location permissions, and the release APK is a
 few tens of KB. It was made for a POCO M2 Pro (MIUI 12, Android 10) after debloating it with this repo's
