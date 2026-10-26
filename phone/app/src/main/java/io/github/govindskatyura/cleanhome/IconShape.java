@@ -69,10 +69,16 @@ final class IconShape {
                 c.drawBitmap(raw, 0, 0, new Paint(Paint.FILTER_BITMAP_FLAG));
                 c.restore();
             } else {
-                // A round icon or a loose glyph: sit it on a white tile, as iOS does with web clips.
+                // A round icon or a loose glyph: sit it on a white tile, as iOS does with web clips. Some
+                // (MIUI's Settings gear) carry wide empty margins, so size the drawn part, not the canvas.
                 c.drawColor(Color.WHITE);
-                int pad = Math.round(size * 0.14f);
-                d.setBounds(pad, pad, size - pad, size - pad);
+                Rect box = drawnBounds(raw);
+                float room = size * 0.70f;
+                float scale = Math.min(room / box.width(), room / box.height());
+                float left = (size - box.width() * scale) / 2f - box.left * scale;
+                float top = (size - box.height() * scale) / 2f - box.top * scale;
+                d.setBounds(Math.round(left), Math.round(top),
+                        Math.round(left + size * scale), Math.round(top + size * scale));
                 d.draw(c);
             }
             raw.recycle();
@@ -84,6 +90,26 @@ final class IconShape {
         new Canvas(out).drawPath(squircle(size), p);
         content.recycle();
         return out;
+    }
+
+    /** The box around everything visibly drawn; the whole bitmap when nothing is. */
+    private static Rect drawnBounds(Bitmap b) {
+        int w = b.getWidth();
+        int h = b.getHeight();
+        int[] px = new int[w * h];
+        b.getPixels(px, 0, w, 0, 0, w, h);
+        int minX = w, minY = h, maxX = -1, maxY = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if ((px[y * w + x] >>> 24) > 24) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        return maxX < 0 ? new Rect(0, 0, w, h) : new Rect(minX, minY, maxX + 1, maxY + 1);
     }
 
     /** Opaque at the edge midpoints and near the corners: a square tile, not a circle or a glyph. */

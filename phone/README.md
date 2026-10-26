@@ -53,11 +53,11 @@ phone/install.sh
 ```
 
 This downloads the newest APK that GitHub built for this branch, installs it, and makes it the Home app.
-On a Xiaomi, Redmi or POCO phone:
 
-- **Developer options > Install via USB** has to be on, or the install is refused.
-- Unless **USB debugging (Security settings)** is on, the script can't set Home itself. It opens the Home app
-  setting instead, where you pick Clean Home.
+On a Xiaomi, Redmi or POCO phone, a USB install needs **Developer options > Install via USB**. MIUI won't
+keep that on without a SIM connection for its Mi account check, so the script falls back when the install
+is refused. It copies the APK to the phone's Downloads folder. You then open it in File Manager, tap
+Install, and run `phone/install.sh --home`.
 
 The stock launcher stays installed. To go back, pick it again under Settings > Apps > Manage apps >
 Default apps > Home screen (the exact path differs between phones), or uninstall Clean Home.
