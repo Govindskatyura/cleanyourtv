@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Clean Home</string>
+    <string name="search">Search</string>
+    <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
+    <string name="edit_home">Edit Home Screen</string>
+    <string name="app_info">App Info</string>
+    <string name="remove_app">Remove App</string>
+    <string name="suggestions">Suggestions</string>
+    <string name="apps">Apps</string>
+    <string name="search_web">Search web for “%1$s”</string>
+    <string name="cannot_open">Can\'t open this app</string>
+</resources>

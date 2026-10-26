@@ -1,0 +1,52 @@
+name: Phone launcher
+
+# Builds phone/ (Clean Home, the iOS-style launcher for Android phones) and keeps the APK as a download.
+on:
+  push:
+    paths: ["phone/**", ".github/workflows/phone.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Lint and release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-34 build-tools;34.0.0
+      - uses: gradle/actions/setup-gradle@v4
+      # The release APK is signed with the debug key. Keep that key from run to run: a new key would
+      # make every update an uninstall first, and the home screen layout would go with it.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: phone-debug-keystore-v1
+      - name: Lint and release build
+        working-directory: phone
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon lintRelease assembleRelease
+      - name: The launcher stays light
+        run: |
+          size=$(stat -c %s phone/app/build/outputs/apk/release/app-release.apk)
+          echo "Clean Home release APK: $((size / 1024)) KB" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$size" -lt 204800 || { echo "APK is over 200 KB; keep the launcher light"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clean-home-apk
+          path: phone/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: lint-report
+          path: phone/app/build/reports/lint-results-release.*
+          if-no-files-found: ignore

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 10 adds a scrim behind gesture and 3-button bars unless told not to. -->
+    <style name="Theme.CleanHome" parent="Base.CleanHome">
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+    </style>
+</resources>

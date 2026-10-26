@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Four rounded tiles: a home screen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,38h6a4,4 0 0,1 4,4v6a4,4 0 0,1 -4,4h-6a4,4 0 0,1 -4,-4v-6a4,4 0 0,1 4,-4z
+            M60,38h6a4,4 0 0,1 4,4v6a4,4 0 0,1 -4,4h-6a4,4 0 0,1 -4,-4v-6a4,4 0 0,1 4,-4z
+            M42,56h6a4,4 0 0,1 4,4v6a4,4 0 0,1 -4,4h-6a4,4 0 0,1 -4,-4v-6a4,4 0 0,1 4,-4z
+            M60,56h6a4,4 0 0,1 4,4v6a4,4 0 0,1 -4,4h-6a4,4 0 0,1 -4,-4v-6a4,4 0 0,1 4,-4z" />
+</vector>
