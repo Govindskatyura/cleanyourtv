@@ -68,6 +68,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     private AppMenu menu;
     private Alert alert;
     private FolderOverlay folder;
+    private WidgetGallery gallery;
     private boolean editing, loading, reloadAgain, loaded, resumed;
     /** Apps that finished loading mid-drag; applied when the app is dropped. */
     private List<App> deferred;
@@ -149,7 +150,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         done.setOnClickListener(v -> setEditing(false));
         plus = pill("+");
         plus.setContentDescription(getString(R.string.add_widget));
-        plus.setOnClickListener(v -> addWidget());
+        plus.setOnClickListener(v -> openWidgetGallery());
         search = new SearchOverlay(this, m, this);
         // Hidden until the first geometry pass knows where they go.
         indicator.setVisibility(View.INVISIBLE);
@@ -190,6 +191,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         super.onStop();
         search.closeNow();
         closeFolder(false);
+        if (gallery != null) gallery.close(null);
         setEditing(false);
     }
 
@@ -220,6 +222,10 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     private boolean closeOverlay(boolean animate) {
         if (alert != null) {
             alert.close(null);
+            return true;
+        }
+        if (gallery != null) {
+            gallery.close(null);
             return true;
         }
         if (menu != null) {
@@ -331,7 +337,6 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
             AppIconView v = viewFor(held);
             if (v != null) v.setVisibility(View.INVISIBLE);
         }
-        plus.setVisibility(editing && !layout.widget ? View.VISIBLE : View.GONE);
         float position = workspace.getScrollX() / (float) Math.max(1, m.width);
         indicator.jumpTo(Math.min(position, Math.max(0, layout.pages.size() - 1)));
         fadeForLibrary(position);
@@ -407,13 +412,19 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         }
         syncViews(!on);
         indicator.setEditing(on);
-        done.animate().cancel();
-        if (on) {
-            done.setVisibility(View.VISIBLE);
-            done.setAlpha(0f);
-            done.animate().alpha(1f).setDuration(180).start();
+        // iOS shows both in jiggle mode: "+" (the widget gallery) top left, Done top right.
+        fadePill(done, on);
+        fadePill(plus, on);
+    }
+
+    private static void fadePill(View pill, boolean show) {
+        pill.animate().cancel();
+        if (show) {
+            pill.setVisibility(View.VISIBLE);
+            pill.setAlpha(0f);
+            pill.animate().alpha(1f).setDuration(180).start();
         } else {
-            done.animate().alpha(0f).setDuration(150).withEndAction(() -> done.setVisibility(View.GONE)).start();
+            pill.animate().alpha(0f).setDuration(150).withEndAction(() -> pill.setVisibility(View.GONE)).start();
         }
     }
 
@@ -535,7 +546,18 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         syncViews(true);
     }
 
-    /** iOS's "+" in jiggle mode: puts the memory widget back at the top of page one. */
+    /** iOS's "+" in jiggle mode: the widget gallery, whose Add Widget puts the memory widget on page one. */
+    private void openWidgetGallery() {
+        if (gallery != null) return;
+        WidgetGallery[] self = new WidgetGallery[1];
+        self[0] = new WidgetGallery(this, m, layout.widget, this::addWidget, () -> {
+            if (gallery == self[0]) gallery = null;
+        });
+        gallery = self[0];
+        root.addView(gallery, new FrameLayout.LayoutParams(MATCH, MATCH));
+        gallery.open();
+    }
+
     private void addWidget() {
         layout.widget = true;
         layout.normalize(m.capacity());

@@ -21,7 +21,8 @@ own apps' icons cut to the iOS shape, and labels use the phone's system font.
   the last row sends the words to your browser.
 - **Memory widget**: an iOS medium widget across the top two rows of page one, showing RAM in use and storage
   in use as rings with the amounts beside them. It reads two system numbers every 3 seconds, and only while
-  the home screen is in front. Remove it with its "−" in jiggle mode; the "+" at the top left puts it back.
+  the home screen is in front. Remove it with its "−" in jiggle mode. The "+" at the top left in jiggle
+  mode opens the widget gallery, with a live preview and Add Widget to put it back.
 - **Long-press an app**: the page dims, the tile lifts, and a menu shows the app's own shortcuts, then
   Edit Home Screen, App Info and Remove App.
 - **Remove App** (or an app's "−" in jiggle mode) asks as iOS does: **Delete App** (apps you installed),
