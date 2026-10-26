@@ -23,8 +23,9 @@
     <string name="remove">Remove</string>
     <string name="remove_widget_title">Remove “%1$s” Widget?</string>
     <string name="remove_widget_message">Removing this widget will not delete any data.</string>
-    <string name="add_widget">Add Widget</string>
-    <string name="add_widget_button">+ Add Widget</string>
+    <string name="add_widget">Add Widgets and Apps</string>
+    <string name="search_widgets_apps">Search Widgets and Apps</string>
+    <string name="add">Add</string>
     <string name="widget_added">On Home Screen</string>
     <string name="memory_about">See how much RAM and storage are in use.</string>
 

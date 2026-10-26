@@ -41,7 +41,7 @@ import java.util.concurrent.Executors;
 /** The home screen. Builds the views in code (no layouts to inflate) and keeps the layout model in step. */
 public class HomeActivity extends Activity implements AppIconView.Host, Workspace.Listener,
         PageIndicator.Listener, AppMenu.Actions, SearchOverlay.Actions, DragLayer.Host, MemoryWidget.Host,
-        AppLibrary.Actions {
+        AppLibrary.Actions, AddSheet.Actions {
 
     private static final int RECENT_MAX = 8;
     private static final int MATCH = FrameLayout.LayoutParams.MATCH_PARENT;
@@ -68,7 +68,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     private AppMenu menu;
     private Alert alert;
     private FolderOverlay folder;
-    private WidgetGallery gallery;
+    private AddSheet gallery;
     private boolean editing, loading, reloadAgain, loaded, resumed;
     /** Apps that finished loading mid-drag; applied when the app is dropped. */
     private List<App> deferred;
@@ -150,7 +150,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         done.setOnClickListener(v -> setEditing(false));
         plus = pill("+");
         plus.setContentDescription(getString(R.string.add_widget));
-        plus.setOnClickListener(v -> openWidgetGallery());
+        plus.setOnClickListener(v -> openAddSheet());
         search = new SearchOverlay(this, m, this);
         // Hidden until the first geometry pass knows where they go.
         indicator.setVisibility(View.INVISIBLE);
@@ -412,7 +412,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         }
         syncViews(!on);
         indicator.setEditing(on);
-        // iOS shows both in jiggle mode: "+" (the widget gallery) top left, Done top right.
+        // iOS shows both in jiggle mode: "+" (widgets and apps to add) top left, Done top right.
         fadePill(done, on);
         fadePill(plus, on);
     }
@@ -546,16 +546,39 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         syncViews(true);
     }
 
-    /** iOS's "+" in jiggle mode: the widget gallery, whose Add Widget puts the memory widget on page one. */
-    private void openWidgetGallery() {
+    /** iOS's "+" in jiggle mode: a sheet with the widget and every app, each one tap from the Home Screen. */
+    private void openAddSheet() {
         if (gallery != null) return;
-        WidgetGallery[] self = new WidgetGallery[1];
-        self[0] = new WidgetGallery(this, m, layout.widget, this::addWidget, () -> {
+        Collator collator = Collator.getInstance();
+        List<App> sorted = new ArrayList<>(apps.values());
+        sorted.sort((a, b) -> collator.compare(a.label, b.label));
+        AddSheet[] self = new AddSheet[1];
+        self[0] = new AddSheet(this, m, layout.widget, sorted, this, () -> {
             if (gallery == self[0]) gallery = null;
         });
         gallery = self[0];
         root.addView(gallery, new FrameLayout.LayoutParams(MATCH, MATCH));
         gallery.open();
+    }
+
+    @Override
+    public boolean isOnHome(App app) {
+        return layout.find(app.key) != null;
+    }
+
+    @Override
+    public void onAddWidget() {
+        addWidget();
+    }
+
+    @Override
+    public void onAddApp(App app) {
+        onAddToHome(app);
+    }
+
+    @Override
+    public void onShowApp(App app) {
+        onShowOnHome(app);
     }
 
     private void addWidget() {
