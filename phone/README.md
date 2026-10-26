@@ -19,17 +19,26 @@ own apps' icons cut to the iOS shape, and labels use the phone's system font.
 - **Search pill**: reads "Search" above the dock and turns into page dots while you swipe. Tap it, or
   pull down anywhere on the page, to search your apps. Suggestions show while the field is empty, and
   the last row sends the words to your browser.
+- **Memory widget**: an iOS medium widget across the top two rows of page one, showing RAM in use and storage
+  in use as rings with the amounts beside them. It reads two system numbers every 3 seconds, and only while
+  the home screen is in front. Remove it with its "−" in jiggle mode; the "+" at the top left puts it back.
 - **Long-press an app**: the page dims, the tile lifts, and a menu shows the app's own shortcuts, then
   Edit Home Screen, App Info and Remove App.
+- **Remove App** (or an app's "−" in jiggle mode) asks as iOS does: **Delete App** (apps you installed),
+  **Remove from Home Screen** (any app; it stays in the App Library), or Cancel.
+- **App Library**: swipe past the last page. Every app is sorted into groups (Suggestions, Recently Added,
+  then Social, Entertainment, Finance and so on), with three apps to open straight away and a small grid
+  that opens the whole group. Its search field lists every app A to Z and narrows as you type. Hold an app
+  there for **Add to Home Screen** or **Delete App**. Groups come from the app's Play Store category, else
+  from words in its name, else Utilities (system apps) or Other.
 - **Jiggle mode**: long-press an empty spot, choose Edit Home Screen, or hold an app and move it. Apps
-  wiggle and the ones you installed get a "−" to remove them. You can drag apps around the grid, onto
-  another page by holding at the screen edge (a new page appears after the last), and into or out of
-  the dock. Tap Done or an empty spot to finish.
+  wiggle and get a "−". You can drag apps around the grid, onto another page by holding at the screen
+  edge (a new page appears after the last), and into or out of the dock. Tap Done or an empty spot to finish.
 - **Home button**: closes whatever is open, and takes you back to page one when you're already home.
-- New apps go at the end of the last page and removed ones disappear. The layout is saved on the phone.
+- New apps go at the end of the last page and uninstalled ones disappear. The layout is saved on the phone.
 
-Not included, to keep it light: widgets, folders, the App Library, notification badges, and a real
-blur behind the dock (Android 10 has no cheap blur, so the dock is tinted glass instead).
+Not included, to keep it light: other widgets, folders on the Home Screen, notification badges, and a
+real blur behind the dock (Android 10 has no cheap blur, so the dock is tinted glass instead).
 
 ## Build
 

@@ -40,7 +40,8 @@ import java.util.concurrent.Executors;
 
 /** The home screen. Builds the views in code (no layouts to inflate) and keeps the layout model in step. */
 public class HomeActivity extends Activity implements AppIconView.Host, Workspace.Listener,
-        PageIndicator.Listener, AppMenu.Actions, SearchOverlay.Actions, DragLayer.Host {
+        PageIndicator.Listener, AppMenu.Actions, SearchOverlay.Actions, DragLayer.Host, MemoryWidget.Host,
+        AppLibrary.Actions {
 
     private static final int RECENT_MAX = 8;
     private static final int MATCH = FrameLayout.LayoutParams.MATCH_PARENT;
@@ -57,12 +58,17 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     private DragController drag;
     private DragLayer root;
     private Workspace workspace;
+    private MemoryWidget widget;
+    private AppLibrary library;
     private Dock dock;
     private PageIndicator indicator;
     private TextView done;
+    private TextView plus;
     private SearchOverlay search;
     private AppMenu menu;
-    private boolean editing, loading, reloadAgain, loaded;
+    private Alert alert;
+    private FolderOverlay folder;
+    private boolean editing, loading, reloadAgain, loaded, resumed;
     /** Apps that finished loading mid-drag; applied when the app is dropped. */
     private List<App> deferred;
 
@@ -95,6 +101,33 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         }
     };
 
+    /** For apps shown in an opened App Library group: tap to open, hold for the App Library menu. */
+    private final AppIconView.Host libraryIcons = new AppIconView.Host() {
+        @Override
+        public boolean isEditing() {
+            return false;
+        }
+
+        @Override
+        public void onAppClick(AppIconView v) {
+            launch(v);
+            closeFolder(false);
+        }
+
+        @Override
+        public void onAppLongPress(AppIconView v) {
+            openLibraryMenu(v.app, v, tileRect(v));
+        }
+
+        @Override
+        public void onRemoveClick(AppIconView v) {
+        }
+
+        @Override
+        public void onDragStart(AppIconView v, MotionEvent e) {
+        }
+    };
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -107,9 +140,16 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
 
         root = new DragLayer(this, this);
         workspace = new Workspace(this, m, this);
+        widget = new MemoryWidget(this, m, this);
+        library = new AppLibrary(this, m, this);
+        workspace.attach(widget, library);
         indicator = new PageIndicator(this, m, this);
         dock = new Dock(this, m);
-        done = doneButton();
+        done = pill(getString(R.string.done));
+        done.setOnClickListener(v -> setEditing(false));
+        plus = pill("+");
+        plus.setContentDescription(getString(R.string.add_widget));
+        plus.setOnClickListener(v -> addWidget());
         search = new SearchOverlay(this, m, this);
         // Hidden until the first geometry pass knows where they go.
         indicator.setVisibility(View.INVISIBLE);
@@ -119,6 +159,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         root.addView(indicator, new FrameLayout.LayoutParams(MATCH, m.indicatorH));
         root.addView(dock, new FrameLayout.LayoutParams(MATCH, m.dockH));
         root.addView(done, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.TOP | Gravity.END));
+        root.addView(plus, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.TOP | Gravity.START));
         root.addView(search, new FrameLayout.LayoutParams(MATCH, MATCH));
         setContentView(root);
 
@@ -130,12 +171,17 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
         applyWallpaperColors();
+        if (layout.widget) widget.start();
+        refreshLibrary();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
+        widget.stop();
         closeMenu(false);
     }
 
@@ -143,6 +189,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     protected void onStop() {
         super.onStop();
         search.closeNow();
+        closeFolder(false);
         setEditing(false);
     }
 
@@ -160,27 +207,38 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         // or go back to page one, as iOS does.
         boolean alreadyHome = hasWindowFocus()
                 && (intent.getFlags() & Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT) != Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT;
-        if (menu != null) {
-            closeMenu(true);
-        } else if (search.isOpen()) {
-            search.close();
-        } else if (editing) {
-            setEditing(false);
-        } else if (alreadyHome) {
-            workspace.snapToPage(0);
-        }
+        if (!closeOverlay(true) && alreadyHome) workspace.snapToPage(0);
     }
 
     @Override
     public void onBackPressed() {
-        // Home has nowhere to go back to: Back only closes what is open on it.
-        if (menu != null) {
-            closeMenu(true);
-        } else if (search.isOpen()) {
-            search.close();
-        } else if (editing) {
-            setEditing(false);
+        // Home has nowhere to go back to: Back closes what is open, or leaves the App Library.
+        if (!closeOverlay(true) && workspace.onLibrary()) workspace.snapToPage(layout.pages.size() - 1);
+    }
+
+    /** Closes the top-most thing that is open; false when there was nothing. */
+    private boolean closeOverlay(boolean animate) {
+        if (alert != null) {
+            alert.close(null);
+            return true;
         }
+        if (menu != null) {
+            closeMenu(animate);
+            return true;
+        }
+        if (folder != null) {
+            closeFolder(animate);
+            return true;
+        }
+        if (search.isOpen()) {
+            search.close();
+            return true;
+        }
+        if (editing) {
+            setEditing(false);
+            return true;
+        }
+        return false;
     }
 
     // ---- Geometry and loading ----
@@ -197,10 +255,17 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         lp = (FrameLayout.LayoutParams) indicator.getLayoutParams();
         lp.topMargin = m.indicatorTop;
         indicator.setLayoutParams(lp);
+        int pillTop = insetTop + Math.round(6 * m.dp);
+        int pillSide = Math.round(14 * m.dp);
         lp = (FrameLayout.LayoutParams) done.getLayoutParams();
-        lp.topMargin = insetTop + Math.round(6 * m.dp);
-        lp.setMarginEnd(Math.round(14 * m.dp));
+        lp.topMargin = pillTop;
+        lp.setMarginEnd(pillSide);
         done.setLayoutParams(lp);
+        lp = (FrameLayout.LayoutParams) plus.getLayoutParams();
+        lp.topMargin = pillTop;
+        lp.setMarginStart(pillSide);
+        plus.setLayoutParams(lp);
+        library.setInsets(insetTop, insetBottom);
         dock.setVisibility(View.VISIBLE);
         indicator.setVisibility(View.VISIBLE);
         workspace.requestLayout();
@@ -244,15 +309,16 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         sorted.sort((a, b) -> collator.compare(a.label, b.label));
         List<String> alphabetical = new ArrayList<>();
         for (App a : sorted) alphabetical.add(a.key);
-        int capacity = m.width > 0 ? m.capacity() : Metrics.COLUMNS * 6;
+        int cells = m.width > 0 ? m.capacity() : Metrics.COLUMNS * 6;
         if (layout.isEmpty()) {
-            layout.seed(Defaults.dock(this, apps), Defaults.order(alphabetical), capacity);
+            layout.seed(Defaults.dock(this, apps), Defaults.order(alphabetical), cells);
         } else {
-            layout.reconcile(apps.keySet(), alphabetical, capacity);
+            layout.reconcile(apps.keySet(), alphabetical, cells);
         }
         layout.save();
         loaded = true;
         syncViews(false);
+        refreshLibrary();
     }
 
     void syncViews(boolean animate) {
@@ -265,6 +331,12 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
             AppIconView v = viewFor(held);
             if (v != null) v.setVisibility(View.INVISIBLE);
         }
+        plus.setVisibility(editing && !layout.widget ? View.VISIBLE : View.GONE);
+        onPageScroll(workspace.getScrollX() / (float) Math.max(1, m.width));
+    }
+
+    private void refreshLibrary() {
+        if (loaded) library.bind(AppLibrary.categorize(this, apps.values(), suggestions()));
     }
 
     // ---- Used by DragController ----
@@ -300,6 +372,20 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         return new float[] {parent.getLeft() + x - scroll + v.iconLeft(), parent.getTop() + y + m.topPad};
     }
 
+    /** A rectangle inside a view, in root coordinates, for views that are not on the pages or the dock. */
+    private float[] rootPosition(View from, Rect inView) {
+        int[] a = new int[2];
+        int[] b = new int[2];
+        from.getLocationOnScreen(a);
+        root.getLocationOnScreen(b);
+        return new float[] {a[0] - b[0] + inView.left, a[1] - b[1] + inView.top};
+    }
+
+    private Rect tileRect(AppIconView v) {
+        int left = Math.round(v.iconLeft());
+        return new Rect(left, m.topPad, left + m.iconSize, m.topPad + m.iconSize);
+    }
+
     void onDragEnded() {
         if (deferred != null) {
             List<App> list = deferred;
@@ -329,9 +415,10 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         }
     }
 
-    private TextView doneButton() {
+    /** Done and "+": iOS's light pills at the top corners in jiggle mode. */
+    private TextView pill(String text) {
         TextView t = new TextView(this);
-        t.setText(R.string.done);
+        t.setText(text);
         t.setTextColor(Color.BLACK);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
@@ -343,7 +430,6 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         bg.setCornerRadius(100 * m.dp);
         t.setBackground(bg);
         t.setVisibility(View.GONE);
-        t.setOnClickListener(x -> setEditing(false));
         return t;
     }
 
@@ -371,7 +457,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
 
     @Override
     public void onRemoveClick(AppIconView v) {
-        uninstall(v.app);
+        showRemoveAlert(v.app);
     }
 
     @Override
@@ -386,9 +472,18 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         drag.onTouch(e);
     }
 
+    /** Also fades the dock and the pill away as the App Library slides in, as iOS does. */
     @Override
     public void onPageScroll(float position) {
-        indicator.setPosition(position);
+        int last = Math.max(0, layout.pages.size() - 1);
+        indicator.setPosition(Math.min(position, last));
+        float lib = Math.max(0f, Math.min(1f, position - last));
+        dock.setAlpha(1f - lib);
+        dock.setTranslationY(lib * m.dockH / 2f);
+        indicator.setAlpha(1f - lib);
+        int shown = lib >= 0.99f || m.width == 0 ? View.INVISIBLE : View.VISIBLE;
+        dock.setVisibility(shown);
+        indicator.setVisibility(shown);
     }
 
     @Override
@@ -398,7 +493,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
 
     @Override
     public void onSwipeDown() {
-        openSearch();
+        openSearch(false);
     }
 
     @Override
@@ -411,18 +506,53 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         if (!search.isOpen()) setEditing(true);
     }
 
+    // ---- Memory widget ----
+
+    @Override
+    public void onWidgetLongPress() {
+        setEditing(true);
+    }
+
+    @Override
+    public void onWidgetRemoveClick() {
+        List<Alert.Button> buttons = new ArrayList<>();
+        buttons.add(new Alert.Button(getString(R.string.remove), Alert.RED, false, this::removeWidget));
+        buttons.add(new Alert.Button(getString(R.string.cancel), Alert.BLUE, true, null));
+        showAlert(getString(R.string.remove_widget_title, getString(R.string.memory)),
+                getString(R.string.remove_widget_message), buttons);
+    }
+
+    private void removeWidget() {
+        layout.widget = false;
+        widget.stop();
+        layout.save();
+        syncViews(true);
+    }
+
+    /** iOS's "+" in jiggle mode: puts the memory widget back at the top of page one. */
+    private void addWidget() {
+        layout.widget = true;
+        layout.normalize(m.capacity());
+        layout.save();
+        syncViews(true);
+        if (resumed) widget.start();
+        workspace.snapToPage(0);
+    }
+
     // ---- Launching ----
 
     private void launch(AppIconView v) {
-        App app = v.app;
+        launch(v.app, v, tileRect(v));
+    }
+
+    /** Opens the app growing out of its tile, as on iOS. {@code inView} is the tile's place inside {@code from}. */
+    private void launch(App app, View from, Rect inView) {
         int[] loc = new int[2];
-        v.getLocationOnScreen(loc);
-        int left = loc[0] + Math.round(v.iconLeft());
-        int top = loc[1] + m.topPad;
-        Rect bounds = new Rect(left, top, left + m.iconSize, top + m.iconSize);
-        // The app grows out of its tile, as on iOS.
-        Bundle opts = ActivityOptions.makeScaleUpAnimation(v, Math.round(v.iconLeft()), m.topPad,
-                m.iconSize, m.iconSize).toBundle();
+        from.getLocationOnScreen(loc);
+        Rect bounds = new Rect(inView);
+        bounds.offset(loc[0], loc[1]);
+        Bundle opts = ActivityOptions.makeScaleUpAnimation(from, inView.left, inView.top,
+                inView.width(), inView.height()).toBundle();
         try {
             launcherApps.startMainActivity(app.component, app.user, bounds, opts);
             remember(app.key);
@@ -456,15 +586,56 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         return out;
     }
 
-    // ---- Long-press menu ----
+    // ---- Removing from the Home Screen ----
+
+    /** iOS's choice: delete the app, or only take it off the Home Screen and keep it in the App Library. */
+    private void showRemoveAlert(App app) {
+        List<Alert.Button> buttons = new ArrayList<>();
+        if (app.removable) {
+            buttons.add(new Alert.Button(getString(R.string.delete_app), Alert.RED, false, () -> uninstall(app)));
+        }
+        buttons.add(new Alert.Button(getString(R.string.remove_from_home), Alert.BLUE, false,
+                () -> removeFromHome(app)));
+        buttons.add(new Alert.Button(getString(R.string.cancel), Alert.BLUE, true, null));
+        showAlert(getString(R.string.remove_title, app.label), getString(R.string.remove_message), buttons);
+    }
+
+    private void removeFromHome(App app) {
+        layout.hide(app.key);
+        layout.save();
+        syncViews(true);
+    }
+
+    private void showAlert(CharSequence title, CharSequence message, List<Alert.Button> buttons) {
+        if (alert != null) alert.close(null);
+        Alert[] self = new Alert[1];
+        self[0] = new Alert(this, m, title, message, buttons, () -> {
+            if (alert == self[0]) alert = null;
+        });
+        alert = self[0];
+        root.addView(alert, new FrameLayout.LayoutParams(MATCH, MATCH));
+        alert.open();
+    }
+
+    // ---- Long-press menus ----
 
     private void openMenu(AppIconView v) {
         closeMenu(false);
         if (search.isOpen()) return;
-        menu = new AppMenu(this, m, v, iconPosition(v, false), shortcutsFor(v.app), launcherApps, this);
+        menu = new AppMenu(this, m, v.app, v, iconPosition(v, false), m.iconSize, shortcutsFor(v.app),
+                launcherApps, this, false, true);
         root.addView(menu, new FrameLayout.LayoutParams(MATCH, MATCH));
         menu.open();
         v.setVisibility(View.INVISIBLE);
+    }
+
+    /** The App Library's menu, from a group, an opened group, or the A-to-Z list. */
+    private void openLibraryMenu(App app, View from, Rect inView) {
+        closeMenu(false);
+        menu = new AppMenu(this, m, app, null, rootPosition(from, inView), inView.width(), shortcutsFor(app),
+                launcherApps, this, true, layout.find(app.key) != null);
+        root.addView(menu, new FrameLayout.LayoutParams(MATCH, MATCH));
+        menu.open();
     }
 
     private void closeMenu(boolean animate) {
@@ -518,7 +689,22 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     @Override
     public void onRemove(App app) {
         closeMenu(false);
+        showRemoveAlert(app);
+    }
+
+    @Override
+    public void onDelete(App app) {
+        closeMenu(false);
         uninstall(app);
+    }
+
+    @Override
+    public void onAddToHome(App app) {
+        closeMenu(false);
+        layout.show(app.key, m.capacity());
+        layout.save();
+        syncViews(false);
+        Toast.makeText(this, R.string.added_to_home, Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -532,21 +718,59 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     }
 
     @Override
-    public void onMenuClosed(AppIconView source) {
-        if (!source.app.key.equals(drag.key())) source.setVisibility(View.VISIBLE);
+    public void onMenuClosed(View hiddenSource) {
+        if (hiddenSource == null) return;
+        String held = drag.key();
+        if (held == null || hiddenSource != viewFor(held)) hiddenSource.setVisibility(View.VISIBLE);
+    }
+
+    // ---- App Library ----
+
+    @Override
+    public void onLibrarySearch() {
+        openSearch(true);
+    }
+
+    @Override
+    public void onCardApp(App app, View card, Rect slot) {
+        launch(app, card, new Rect(slot));
+    }
+
+    @Override
+    public void onCardAppLongPress(App app, View card, Rect slot) {
+        openLibraryMenu(app, card, new Rect(slot));
+    }
+
+    @Override
+    public void onCardOpen(String title, List<App> group) {
+        closeFolder(false);
+        FolderOverlay[] self = new FolderOverlay[1];
+        self[0] = new FolderOverlay(this, m, title, group, libraryIcons, () -> {
+            if (folder == self[0]) folder = null;
+        });
+        folder = self[0];
+        root.addView(folder, new FrameLayout.LayoutParams(MATCH, MATCH));
+        folder.open();
+    }
+
+    private void closeFolder(boolean animate) {
+        if (folder == null) return;
+        FolderOverlay closing = folder;
+        folder = null;
+        closing.close(animate);
     }
 
     // ---- Search ----
 
     @Override
     public void onSearch() {
-        openSearch();
+        openSearch(false);
     }
 
-    private void openSearch() {
+    private void openSearch(boolean appLibrary) {
         if (editing) return;
         closeMenu(false);
-        search.open();
+        search.open(appLibrary);
     }
 
     @Override
@@ -579,6 +803,17 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
     }
 
     @Override
+    public void launchApp(App app, View from) {
+        launch(app, from, new Rect(0, 0, from.getWidth(), from.getHeight()));
+        search.closeNow();
+    }
+
+    @Override
+    public void appMenu(App app, View from) {
+        openLibraryMenu(app, from, new Rect(0, 0, from.getWidth(), from.getHeight()));
+    }
+
+    @Override
     public void searchWeb(String query) {
         try {
             startActivity(new Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, query));
@@ -595,7 +830,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
 
     // ---- Wallpaper ----
 
-    /** Tints the dock and the search pill from the wallpaper, and picks status bar icons that show up on it. */
+    /** Tints the dock, the pill and the App Library from the wallpaper, and picks status bar icons that show up on it. */
     private void applyWallpaperColors() {
         int base = 0xFF8E8E93;
         boolean light = false;
@@ -613,6 +848,7 @@ public class HomeActivity extends Activity implements AppIconView.Host, Workspac
         int glass = Color.argb(light ? 0x66 : 0x4D, r, g, b);
         dock.setTint(glass);
         indicator.setTint(glass);
+        library.setTint(glass);
         int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
         if (light) flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;

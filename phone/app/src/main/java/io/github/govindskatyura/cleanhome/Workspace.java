@@ -44,6 +44,8 @@ final class Workspace extends ViewGroup {
     static final Interpolator EASE = new DecelerateInterpolator(1.6f);
 
     final Map<String, AppIconView> views = new HashMap<>();
+    private MemoryWidget widget;
+    private View library;
     private final Metrics m;
     private final Listener listener;
     private final OverScroller scroller;
@@ -71,6 +73,14 @@ final class Workspace extends ViewGroup {
         };
     }
 
+    /** The memory widget (top of page one) and the App Library (the page after the last), added once. */
+    void attach(MemoryWidget widget, View library) {
+        this.widget = widget;
+        this.library = library;
+        addView(widget);
+        addView(library);
+    }
+
     /** Places every app the layout puts on a page. New views appear in place; moved ones glide. */
     void sync(HomeLayout layout, Map<String, App> apps, AppIconView.Host host, boolean editing, boolean animate) {
         Set<String> wanted = new HashSet<>();
@@ -96,15 +106,31 @@ final class Workspace extends ViewGroup {
                 }
                 if (v.app != app) v.setApp(app);
                 v.setWiggle(editing);
-                int col = i % Metrics.COLUMNS;
-                int row = Math.min(i / Metrics.COLUMNS, m.rows - 1);
+                int cell = i + layout.offset(p);
+                int col = cell % Metrics.COLUMNS;
+                int row = Math.min(cell / Metrics.COLUMNS, m.rows - 1);
                 float x = p * m.width + m.sidePad + col * m.cellW;
                 float y = m.gridTop + row * m.cellH + (m.cellH - contentH) / 2f;
                 place(v, x, y, animate);
             }
         }
-        pageCount = Math.max(1, layout.pages.size());
+        if (widget != null) {
+            widget.setVisibility(layout.widget ? VISIBLE : GONE);
+            widget.setWiggle(layout.widget && editing);
+            // iOS sizes a widget to the icon grid: from the first icon's left edge to the last one's right,
+            // and from the top of row one's icons to the bottom of row two's.
+            widget.setFrame((Metrics.COLUMNS - 1) * m.cellW + m.iconSize, m.cellH + m.iconSize);
+            widget.setTranslationX(m.sidePad + (m.cellW - m.iconSize) / 2f - widget.pad);
+            widget.setTranslationY(m.gridTop + (m.cellH - contentH) / 2f);
+        }
+        if (library != null) library.setTranslationX(layout.pages.size() * m.width);
+        pageCount = Math.max(1, layout.pages.size()) + 1;
         if (currentPage >= pageCount) snapToPage(pageCount - 1);
+    }
+
+    /** On the App Library, the page after the last. */
+    boolean onLibrary() {
+        return currentPage == pageCount - 1;
     }
 
     static void place(AppIconView v, float x, float y, boolean animate) {
@@ -165,7 +191,18 @@ final class Workspace extends ViewGroup {
         setMeasuredDimension(MeasureSpec.getSize(widthSpec), MeasureSpec.getSize(heightSpec));
         int cw = MeasureSpec.makeMeasureSpec(Math.round(m.cellW), MeasureSpec.EXACTLY);
         int ch = MeasureSpec.makeMeasureSpec(m.contentHeight(true), MeasureSpec.EXACTLY);
-        for (int i = 0; i < getChildCount(); i++) getChildAt(i).measure(cw, ch);
+        for (int i = 0; i < getChildCount(); i++) {
+            View v = getChildAt(i);
+            if (v == widget) {
+                v.measure(MeasureSpec.makeMeasureSpec(widget.viewWidth(), MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(widget.viewHeight(), MeasureSpec.EXACTLY));
+            } else if (v == library) {
+                v.measure(MeasureSpec.makeMeasureSpec(getMeasuredWidth(), MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(getMeasuredHeight(), MeasureSpec.EXACTLY));
+            } else {
+                v.measure(cw, ch);
+            }
+        }
     }
 
     @Override
@@ -221,7 +258,8 @@ final class Workspace extends ViewGroup {
             lastX = e.getX();
             return true;
         }
-        if (!listener.isEditing() && dy > touchSlop * 2 && dy > Math.abs(dx) * 1.5f) {
+        // Not on the App Library, which scrolls up and down itself.
+        if (!listener.isEditing() && !onLibrary() && dy > touchSlop * 2 && dy > Math.abs(dx) * 1.5f) {
             removeCallbacks(emptyLongPress);
             swiped = true;
             listener.onSwipeDown();

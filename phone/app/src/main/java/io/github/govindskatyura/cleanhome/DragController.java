@@ -109,7 +109,8 @@ final class DragController {
             page = ws.getCurrentPage();
             List<String> items = page < layout.pages.size() ? layout.pages.get(page) : Collections.emptyList();
             int last = items.contains(key) ? items.size() - 1 : items.size();
-            index = Math.min(ws.cellAt(x, y), Math.max(0, last));
+            // On page one the widget holds the first cells: a finger over it means the first app's place.
+            index = Math.min(Math.max(0, ws.cellAt(x, y) - layout.offset(page)), Math.max(0, last));
             float edge = 22 * m.dp;
             if (x < edge) {
                 scheduleFlip(-1);

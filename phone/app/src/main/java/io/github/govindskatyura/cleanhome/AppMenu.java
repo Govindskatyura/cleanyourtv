@@ -25,7 +25,8 @@ import java.util.List;
 
 /**
  * The iOS long-press menu: the page dims, the app's tile lifts, and a rounded card opens beside it with
- * the app's own shortcuts (Android's Quick Actions), then Edit Home Screen, App Info and Remove App.
+ * the app's own shortcuts (Android's Quick Actions), then the system actions. On the Home Screen those are
+ * Edit Home Screen, App Info and Remove App; in the App Library, Add to Home Screen, App Info and Delete App.
  */
 @SuppressLint("ViewConstructor")
 final class AppMenu extends FrameLayout {
@@ -36,15 +37,19 @@ final class AppMenu extends FrameLayout {
 
         void onRemove(App app);
 
+        void onDelete(App app);
+
+        void onAddToHome(App app);
+
         void onShortcut(ShortcutInfo shortcut);
 
-        void onMenuClosed(AppIconView source);
+        void onMenuClosed(View hiddenSource);
     }
 
     private static final String SECTION = "section";
 
     private final Metrics m;
-    private final AppIconView source;
+    private final View hiddenSource;
     private final Actions actions;
     private final View dim;
     private final ImageView lifted;
@@ -52,15 +57,22 @@ final class AppMenu extends FrameLayout {
     private final boolean night;
     private boolean closing;
 
-    AppMenu(Context c, Metrics m, AppIconView source, float[] iconAt, List<ShortcutInfo> shortcuts,
-            LauncherApps launcherApps, Actions actions) {
+    /**
+     * @param hiddenSource the view showing this app's tile, hidden while the lifted copy is up; may be null
+     * @param iconAt       the tile's top-left corner in this overlay's coordinates
+     * @param library      opened from the App Library rather than the Home Screen
+     * @param onHome       the app has a place on the Home Screen
+     */
+    AppMenu(Context c, Metrics m, App app, View hiddenSource, float[] iconAt, int iconSize,
+            List<ShortcutInfo> shortcuts, LauncherApps launcherApps, Actions actions, boolean library, boolean onHome) {
         super(c);
         this.m = m;
-        this.source = source;
+        this.hiddenSource = hiddenSource;
         this.actions = actions;
         night = (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
         int textColor = night ? Color.WHITE : Color.BLACK;
+        int red = 0xFFFF3B30;
 
         dim = new View(c);
         dim.setBackgroundColor(0x66000000);
@@ -68,8 +80,8 @@ final class AppMenu extends FrameLayout {
         addView(dim, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         lifted = new ImageView(c);
-        lifted.setImageBitmap(source.app.icon);
-        addView(lifted, new LayoutParams(m.iconSize, m.iconSize));
+        lifted.setImageBitmap(app.icon);
+        addView(lifted, new LayoutParams(iconSize, iconSize));
         lifted.setX(iconAt[0]);
         lifted.setY(iconAt[1]);
 
@@ -94,14 +106,21 @@ final class AppMenu extends FrameLayout {
             addRow(label, icon, textColor, v -> actions.onShortcut(s));
         }
         if (!shortcuts.isEmpty()) addSection();
-        addRow(c.getString(R.string.edit_home), tinted(R.drawable.ic_menu_edit, textColor), textColor,
-                v -> actions.onEditHome());
+        if (!library) {
+            addRow(c.getString(R.string.edit_home), tinted(R.drawable.ic_menu_edit, textColor), textColor,
+                    v -> actions.onEditHome());
+        } else if (!onHome) {
+            addRow(c.getString(R.string.add_to_home), tinted(R.drawable.ic_menu_add, textColor), textColor,
+                    v -> actions.onAddToHome(app));
+        }
         addRow(c.getString(R.string.app_info), tinted(R.drawable.ic_menu_info, textColor), textColor,
-                v -> actions.onAppInfo(source.app));
-        if (source.app.removable) {
-            int red = 0xFFFF3B30;
+                v -> actions.onAppInfo(app));
+        if (!library) {
             addRow(c.getString(R.string.remove_app), tinted(R.drawable.ic_menu_remove, red), red,
-                    v -> actions.onRemove(source.app));
+                    v -> actions.onRemove(app));
+        } else if (app.removable) {
+            addRow(c.getString(R.string.delete_app), tinted(R.drawable.ic_menu_remove, red), red,
+                    v -> actions.onDelete(app));
         }
 
         int width = Math.round(250 * m.dp);
@@ -112,10 +131,10 @@ final class AppMenu extends FrameLayout {
 
         // Beside the icon, on the side with room: under it if it fits, else above.
         float margin = 12 * m.dp;
-        boolean leftHalf = iconAt[0] + m.iconSize / 2f < m.width / 2f;
-        float x = leftHalf ? iconAt[0] : iconAt[0] + m.iconSize - width;
+        boolean leftHalf = iconAt[0] + iconSize / 2f < m.width / 2f;
+        float x = leftHalf ? iconAt[0] : iconAt[0] + iconSize - width;
         x = Math.max(margin, Math.min(m.width - width - margin, x));
-        float below = iconAt[1] + m.iconSize + margin;
+        float below = iconAt[1] + iconSize + margin;
         boolean fitsBelow = below + height < m.height - m.insetBottom - margin;
         float y = fitsBelow ? below : iconAt[1] - margin - height;
         y = Math.max(m.insetTop + margin, y);
@@ -142,7 +161,7 @@ final class AppMenu extends FrameLayout {
         Runnable done = () -> {
             ViewGroup parent = (ViewGroup) getParent();
             if (parent != null) parent.removeView(this);
-            actions.onMenuClosed(source);
+            actions.onMenuClosed(hiddenSource);
         };
         if (!animate) {
             done.run();

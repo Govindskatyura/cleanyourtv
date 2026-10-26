@@ -109,7 +109,8 @@ final class AppIconView extends View {
         if (showLabel) {
             c.drawText(shownLabel, 0, shownLabel.length(), getWidth() / 2f, m.labelBaseline, m.labelPaint);
         }
-        if (host.isEditing() && app.removable) drawBadge(c, left);
+        // Every app can leave the Home Screen (it stays in the App Library), so every app gets the badge.
+        if (host.isEditing()) drawBadge(c, left);
     }
 
     /** iOS 16's grey "minus" on the tile's top-left corner. */
@@ -149,7 +150,7 @@ final class AppIconView extends View {
                 longPressed = false;
                 moved = false;
                 dragging = false;
-                onBadge = host.isEditing() && app.removable && inBadge(downX, downY);
+                onBadge = host.isEditing() && inBadge(downX, downY);
                 if (host.isEditing()) {
                     // In jiggle mode a swipe that starts on an app moves the app, not the page.
                     getParent().requestDisallowInterceptTouchEvent(true);

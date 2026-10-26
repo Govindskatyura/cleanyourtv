@@ -52,8 +52,10 @@ final class AppRepository {
                     icons.put(key, icon);
                 }
             }
-            boolean removable = (info.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) == 0;
-            apps.add(new App(cn, me, info.getLabel().toString(), icon, removable));
+            ApplicationInfo ai = info.getApplicationInfo();
+            boolean removable = (ai.flags & ApplicationInfo.FLAG_SYSTEM) == 0;
+            apps.add(new App(cn, me, info.getLabel().toString(), icon, removable, ai.category,
+                    info.getFirstInstallTime()));
         }
         return apps;
     }

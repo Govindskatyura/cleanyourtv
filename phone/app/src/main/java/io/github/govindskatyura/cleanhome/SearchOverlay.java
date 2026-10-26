@@ -3,8 +3,10 @@ package io.github.govindskatyura.cleanhome;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
 import android.text.Editable;
 import android.text.InputType;
@@ -14,11 +16,14 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.Space;
 import android.widget.TextView;
 
@@ -29,8 +34,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * iOS Spotlight, for apps: a search field over a dark veil, suggestions while it is empty, matching apps
- * as you type, and a last row that hands the words to the web browser. No index, no network of its own.
+ * Two iOS searches over a dark veil. Spotlight (pull down on a page, or the Search pill): suggestions,
+ * then matching apps as a grid and a row that hands the words to the browser. App Library search (its
+ * field at the top): every app A to Z as a list, narrowed as you type. No index, no network of its own.
  */
 @SuppressLint("ViewConstructor")
 final class SearchOverlay extends FrameLayout {
@@ -40,6 +46,10 @@ final class SearchOverlay extends FrameLayout {
         List<App> suggestions();
 
         void launchFromSearch(AppIconView v);
+
+        void launchApp(App app, View from);
+
+        void appMenu(App app, View from);
 
         void searchWeb(String query);
     }
@@ -53,19 +63,22 @@ final class SearchOverlay extends FrameLayout {
     private final EditText field;
     private final LinearLayout results;
     private final AppIconView.Host iconHost;
+    private boolean library;
     private AppIconView firstHit;
+    private App firstApp;
+    private View firstRowIcon;
 
     SearchOverlay(Context c, Metrics m, Actions actions) {
         super(c);
         this.m = m;
         this.actions = actions;
         // iOS blurs the home screen here; a dark veil reads the same and costs nothing.
-        setBackgroundColor(0xC7000000);
+        setBackgroundColor(0xD9000000);
         setClickable(true);
 
         column = new LinearLayout(c);
         column.setOrientation(LinearLayout.VERTICAL);
-        addView(column, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        addView(column, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         bar = new LinearLayout(c);
         bar.setOrientation(LinearLayout.HORIZONTAL);
@@ -74,7 +87,6 @@ final class SearchOverlay extends FrameLayout {
                 Math.round(40 * m.dp)));
 
         field = new EditText(c);
-        field.setHint(R.string.search);
         field.setHintTextColor(0x99FFFFFF);
         field.setTextColor(Color.WHITE);
         field.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
@@ -87,12 +99,8 @@ final class SearchOverlay extends FrameLayout {
         field.setBackground(fieldBg);
         int pad = Math.round(10 * m.dp);
         field.setPadding(pad, 0, pad, 0);
-        Drawable glass = c.getDrawable(R.drawable.ic_search);
+        Drawable glass = glyph(0x99FFFFFF);
         if (glass != null) {
-            glass = glass.mutate();
-            glass.setTint(0x99FFFFFF);
-            int size = Math.round(18 * m.dp);
-            glass.setBounds(0, 0, size, size);
             field.setCompoundDrawablesRelative(glass, null, null, null);
             field.setCompoundDrawablePadding(Math.round(6 * m.dp));
         }
@@ -109,10 +117,18 @@ final class SearchOverlay extends FrameLayout {
         bar.addView(cancel, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.MATCH_PARENT));
 
+        ScrollView scroll = new ScrollView(c);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setFillViewport(true);
+        column.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
         results = new LinearLayout(c);
         results.setOrientation(LinearLayout.VERTICAL);
-        column.addView(results, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
+        results.setPadding(0, 0, 0, Math.round(24 * m.dp));
+        // A tap on empty space closes search; apps and rows take their own taps.
+        results.setOnClickListener(v -> close());
+        scroll.addView(results, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT));
 
         iconHost = new AppIconView.Host() {
             @Override
@@ -159,18 +175,33 @@ final class SearchOverlay extends FrameLayout {
             String q = query();
             if (firstHit != null) {
                 actions.launchFromSearch(firstHit);
-            } else if (!q.isEmpty()) {
+            } else if (firstApp != null && firstRowIcon != null) {
+                actions.launchApp(firstApp, firstRowIcon);
+            } else if (!q.isEmpty() && !library) {
                 actions.searchWeb(q);
             }
             return true;
         });
     }
 
+    private Drawable glyph(int color) {
+        Drawable d = getContext().getDrawable(R.drawable.ic_search);
+        if (d == null) return null;
+        d = d.mutate();
+        d.setTint(color);
+        int size = Math.round(18 * m.dp);
+        d.setBounds(0, 0, size, size);
+        return d;
+    }
+
     boolean isOpen() {
         return getVisibility() == VISIBLE;
     }
 
-    void open() {
+    /** @param appLibrary the App Library's A-to-Z list rather than Spotlight */
+    void open(boolean appLibrary) {
+        library = appLibrary;
+        field.setHint(appLibrary ? R.string.app_library : R.string.search);
         column.setPadding(Math.round(16 * m.dp), m.insetTop + Math.round(8 * m.dp), Math.round(16 * m.dp), 0);
         field.setText("");
         refresh();
@@ -212,7 +243,15 @@ final class SearchOverlay extends FrameLayout {
         String q = query();
         results.removeAllViews();
         firstHit = null;
-        List<App> list = q.isEmpty() ? actions.suggestions() : match(q);
+        firstApp = null;
+        firstRowIcon = null;
+        if (library) {
+            List<App> list = q.isEmpty() ? alphabetical(actions.allApps()) : match(q, Integer.MAX_VALUE);
+            if (!list.isEmpty()) firstApp = list.get(0);
+            for (App a : list) results.addView(row(a));
+            return;
+        }
+        List<App> list = q.isEmpty() ? actions.suggestions() : match(q, MAX_RESULTS);
         if (!list.isEmpty()) {
             results.addView(heading(q.isEmpty() ? R.string.suggestions : R.string.apps));
             LinearLayout row = null;
@@ -230,20 +269,27 @@ final class SearchOverlay extends FrameLayout {
                 row.addView(v, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             }
             int rest = (Metrics.COLUMNS - list.size() % Metrics.COLUMNS) % Metrics.COLUMNS;
-            for (int i = 0; i < rest; i++) {
+            for (int i = 0; i < rest && row != null; i++) {
                 row.addView(new Space(getContext()), new LinearLayout.LayoutParams(0, 1, 1f));
             }
         }
         if (!q.isEmpty()) results.addView(webRow(q));
     }
 
+    private static List<App> alphabetical(Collection<App> apps) {
+        Collator collator = Collator.getInstance();
+        List<App> out = new ArrayList<>(apps);
+        out.sort((a, b) -> collator.compare(a.label, b.label));
+        return out;
+    }
+
     /** Names that start with the words first, then a later word that does, then anything containing them. */
-    private List<App> match(String q) {
+    private List<App> match(String q, int max) {
         String lq = q.toLowerCase(Locale.ROOT);
         List<App> starts = new ArrayList<>();
         List<App> words = new ArrayList<>();
         List<App> inside = new ArrayList<>();
-        for (App a : actions.allApps()) {
+        for (App a : alphabetical(actions.allApps())) {
             String l = a.label.toLowerCase(Locale.ROOT);
             if (l.startsWith(lq)) {
                 starts.add(a);
@@ -253,14 +299,44 @@ final class SearchOverlay extends FrameLayout {
                 inside.add(a);
             }
         }
-        Collator collator = Collator.getInstance();
-        starts.sort((a, b) -> collator.compare(a.label, b.label));
-        words.sort((a, b) -> collator.compare(a.label, b.label));
-        inside.sort((a, b) -> collator.compare(a.label, b.label));
         List<App> out = new ArrayList<>(starts);
         out.addAll(words);
         out.addAll(inside);
-        return out.size() > MAX_RESULTS ? out.subList(0, MAX_RESULTS) : out;
+        return out.size() > max ? out.subList(0, max) : out;
+    }
+
+    /** One App Library row: the icon and the name. Long-press for Add to Home Screen, App Info, Delete App. */
+    private View row(App a) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(Math.round(4 * m.dp), 0, Math.round(4 * m.dp), 0);
+        ImageView icon = new ImageView(getContext());
+        icon.setImageBitmap(a.icon);
+        icon.setContentDescription(a.label);
+        int size = Math.round(38 * m.dp);
+        row.addView(icon, new LinearLayout.LayoutParams(size, size));
+        TextView name = new TextView(getContext());
+        name.setText(a.label);
+        name.setTextColor(Color.WHITE);
+        name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMarginStart(Math.round(14 * m.dp));
+        row.addView(name, lp);
+        StateListDrawable pressed = new StateListDrawable();
+        pressed.addState(new int[] {android.R.attr.state_pressed}, new ColorDrawable(0x1FFFFFFF));
+        row.setBackground(pressed);
+        row.setOnClickListener(v -> actions.launchApp(a, icon));
+        row.setOnLongClickListener(v -> {
+            actions.appMenu(a, icon);
+            return true;
+        });
+        row.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                Math.round(54 * m.dp)));
+        if (firstRowIcon == null) firstRowIcon = icon;
+        return row;
     }
 
     private TextView heading(int text) {
@@ -286,12 +362,8 @@ final class SearchOverlay extends FrameLayout {
         bg.setColor(0x3D767680);
         bg.setCornerRadius(12 * m.dp);
         t.setBackground(bg);
-        Drawable glass = getContext().getDrawable(R.drawable.ic_search);
+        Drawable glass = glyph(Color.WHITE);
         if (glass != null) {
-            glass = glass.mutate();
-            glass.setTint(Color.WHITE);
-            int size = Math.round(18 * m.dp);
-            glass.setBounds(0, 0, size, size);
             t.setCompoundDrawablesRelative(glass, null, null, null);
             t.setCompoundDrawablePadding(Math.round(10 * m.dp));
         }
@@ -301,13 +373,5 @@ final class SearchOverlay extends FrameLayout {
         lp.topMargin = Math.round(18 * m.dp);
         t.setLayoutParams(lp);
         return t;
-    }
-
-    /** Swallows every touch so nothing behind opens; a tap below the results closes search. */
-    @SuppressLint("ClickableViewAccessibility")
-    @Override
-    public boolean onTouchEvent(MotionEvent e) {
-        if (e.getActionMasked() == MotionEvent.ACTION_UP && e.getY() > column.getBottom()) close();
-        return true;
     }
 }

@@ -11,4 +11,39 @@
     <string name="apps">Apps</string>
     <string name="search_web">Search web for “%1$s”</string>
     <string name="cannot_open">Can\'t open this app</string>
+
+    <!-- Removing apps and the widget -->
+    <string name="delete_app">Delete App</string>
+    <string name="remove_from_home">Remove from Home Screen</string>
+    <string name="remove_title">Remove “%1$s”?</string>
+    <string name="remove_message">Removing from Home Screen will keep the app in your App Library.</string>
+    <string name="add_to_home">Add to Home Screen</string>
+    <string name="added_to_home">Added to Home Screen</string>
+    <string name="remove">Remove</string>
+    <string name="remove_widget_title">Remove “%1$s” Widget?</string>
+    <string name="remove_widget_message">Removing this widget will not delete any data.</string>
+    <string name="add_widget">Add Widget</string>
+
+    <!-- Memory widget -->
+    <string name="memory">Memory</string>
+    <string name="ram">RAM</string>
+    <string name="storage">Storage</string>
+    <string name="of_total">of %1$s</string>
+    <string name="percent">%1$d%%</string>
+
+    <!-- App Library -->
+    <string name="app_library">App Library</string>
+    <string name="recently_added">Recently Added</string>
+    <string name="cat_games">Games</string>
+    <string name="cat_entertainment">Entertainment</string>
+    <string name="cat_photo">Photo &amp; Video</string>
+    <string name="cat_social">Social</string>
+    <string name="cat_reading">Information &amp; Reading</string>
+    <string name="cat_travel">Travel</string>
+    <string name="cat_productivity">Productivity</string>
+    <string name="cat_finance">Finance</string>
+    <string name="cat_shopping">Shopping &amp; Food</string>
+    <string name="cat_health">Health &amp; Fitness</string>
+    <string name="cat_utilities">Utilities</string>
+    <string name="cat_other">Other</string>
 </resources>
