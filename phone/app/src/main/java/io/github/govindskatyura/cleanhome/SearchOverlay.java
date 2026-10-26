@@ -202,6 +202,9 @@ final class SearchOverlay extends FrameLayout {
     void open(boolean appLibrary) {
         library = appLibrary;
         field.setHint(appLibrary ? R.string.app_library : R.string.search);
+        // Spotlight lets the page show faintly through. The A-to-Z list sits over the App Library's own
+        // field and cards, which would show through between the rows, so it gets a near-solid background.
+        setBackgroundColor(appLibrary ? 0xF7121214 : 0xD9000000);
         column.setPadding(Math.round(16 * m.dp), m.insetTop + Math.round(8 * m.dp), Math.round(16 * m.dp), 0);
         field.setText("");
         refresh();
